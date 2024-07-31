@@ -1,0 +1,207 @@
+#!/bin/bash
+
+# Path to the dietpi-globals file
+DIETPI_GLOBALS="/boot/dietpi/func/dietpi-globals"
+
+# Color codes
+COLOR_DATETIME="\e[97m"
+COLOR_LABEL="\e[37m"
+COLOR_SEPARATOR="\e[38;5;154m"
+COLOR_RESET="\e[0m"
+
+# Temperature
+COLOR_CPU_TEMP="\e[93m"
+COLOR_CPU_TEMP_COLD="\e[38;5;39m"
+THRSH_CPU_TEMP_COOL=30
+COLOR_CPU_TEMP_COOL="\e[96m"
+THRSH_CPU_TEMP_OPTIMAL=40
+COLOR_CPU_TEMP_OPTIMAL="\e[92m"
+THRSH_CPU_TEMP_WARM=50
+COLOR_CPU_TEMP_WARM="\e[93m"
+THRSH_CPU_TEMP_HOT=60
+COLOR_CPU_TEMP_HOT="\e[38;5;214m"
+THRSH_CPU_TEMP_SCORCH=70
+COLOR_CPU_TEMP_SCORCH="\e[91m"
+THRSH_CPU_TEMP_BURN=80
+COLOR_CPU_TEMP_BURN="\e[95m"
+
+# CPU load
+COLOR_CPU_LOAD="\e[92m"
+COLOR_CPU_LOAD_IDLE="\e[38;5;39m"
+THRSH_CPU_LOAD_LOW=6
+COLOR_CPU_LOAD_LOW="\e[96m"
+THRSH_CPU_LOAD_MODERATE=17
+COLOR_CPU_LOAD_MODERATE="\e[92m"
+THRSH_CPU_LOAD_MEDIUM=34
+COLOR_CPU_LOAD_MEDIUM="\e[93m"
+THRSH_CPU_LOAD_HIGH=68
+COLOR_CPU_LOAD_HIGH="\e[38;5;214m"
+THRSH_CPU_LOAD_HEAVY=84
+COLOR_CPU_LOAD_HEAVY="\e[91m"
+THRSH_CPU_LOAD_FULL=95
+COLOR_CPU_LOAD_FULL="\e[95m"
+
+# RAM usage
+COLOR_RAM_USAGE="\e[96m"
+COLOR_RAM_USAGE_IDLE="\e[38;5;39m"
+THRSH_RAM_USAGE_LOW=6
+COLOR_RAM_USAGE_LOW="\e[96m"
+THRSH_RAM_USAGE_MODERATE=17
+COLOR_RAM_USAGE_MODERATE="\e[92m"
+THRSH_RAM_USAGE_MEDIUM=34
+COLOR_RAM_USAGE_MEDIUM="\e[93m"
+THRSH_RAM_USAGE_HIGH=68
+COLOR_RAM_USAGE_HIGH="\e[38;5;214m"
+THRSH_RAM_USAGE_HEAVY=84
+COLOR_RAM_USAGE_HEAVY="\e[91m"
+THRSH_RAM_USAGE_FULL=95
+COLOR_RAM_USAGE_FULL="\e[95m"
+
+# Default options
+COLOR_GRADING=true          # Use color grading of the values
+LOG_PERIOD=0                # Period for moving to a new line
+
+# Function to determine color based on cpu temperature
+get_color_cputemp() {
+    local temp=$1
+    if (( temp >= THRSH_CPU_TEMP_BURN )); then
+        echo ${COLOR_CPU_TEMP_BURN}
+    elif (( temp >= THRSH_CPU_TEMP_SCORCH )); then
+        echo ${COLOR_CPU_TEMP_SCORCH}
+    elif (( temp >= THRSH_CPU_TEMP_HOT )); then
+        echo ${COLOR_CPU_TEMP_HOT}
+    elif (( temp >= THRSH_CPU_TEMP_WARM )); then
+        echo ${COLOR_CPU_TEMP_WARM}
+    elif (( temp >= THRSH_CPU_TEMP_OPTIMAL )); then
+        echo ${COLOR_CPU_TEMP_OPTIMAL}
+    elif (( temp >= THRSH_CPU_TEMP_COOL )); then
+        echo ${COLOR_CPU_TEMP_COOL}
+    else
+        echo ${COLOR_CPU_TEMP_COLD}
+    fi
+}
+
+# Function to determine color based on cpu load
+get_color_cpuload() {
+    local load=$1
+    load=$(printf "%.0f" "$load")  # Convert to integer
+    if (( load >= THRSH_CPU_LOAD_FULL )); then
+        echo ${COLOR_CPU_LOAD_FULL}
+    elif (( load >= THRSH_CPU_LOAD_HEAVY )); then
+        echo ${COLOR_CPU_LOAD_HEAVY}
+    elif (( load >= THRSH_CPU_LOAD_HIGH )); then
+        echo ${COLOR_CPU_LOAD_HIGH}
+    elif (( load >= THRSH_CPU_LOAD_MEDIUM )); then
+        echo ${COLOR_CPU_LOAD_MEDIUM}
+    elif (( load >= THRSH_CPU_LOAD_MODERATE )); then
+        echo ${COLOR_CPU_LOAD_MODERATE}
+    elif (( load >= THRSH_CPU_LOAD_LOW )); then
+        echo ${COLOR_CPU_LOAD_LOW}
+    else
+        echo ${COLOR_CPU_LOAD_IDLE}
+    fi
+}
+
+# Function to determine color based on ram usage
+get_color_ramusage() {
+    local usage=$1
+    usage=$(printf "%.0f" "$usage")  # Convert to integer
+    if (( usage >= THRSH_RAM_USAGE_FULL )); then
+        echo ${COLOR_RAM_USAGE_FULL}
+    elif (( usage >= THRSH_RAM_USAGE_HEAVY )); then
+        echo ${COLOR_RAM_USAGE_HEAVY}
+    elif (( usage >= THRSH_RAM_USAGE_HIGH )); then
+        echo ${COLOR_RAM_USAGE_HIGH}
+    elif (( usage >= THRSH_RAM_USAGE_MEDIUM )); then
+        echo ${COLOR_RAM_USAGE_MEDIUM}
+    elif (( usage >= THRSH_RAM_USAGE_MODERATE )); then
+        echo ${COLOR_RAM_USAGE_MODERATE}
+    elif (( usage >= THRSH_RAM_USAGE_LOW )); then
+        echo ${COLOR_RAM_USAGE_LOW}
+    else
+        echo ${COLOR_RAM_USAGE_IDLE}
+    fi
+}
+
+# Function to print usage information
+print_usage() {
+    echo "Usage: $0 [-n] [-l period]"
+    echo "  -n           Do not use color grading for values."
+    echo "  -l period    Log period (in seconds) after which to move output to a new line. 0 = disabled (default)."
+}
+
+# Parse command-line options
+while getopts "nl:" opt; do
+    case ${opt} in
+        n )
+            COLOR_GRADING=false
+            ;;
+        l )
+            LOG_PERIOD=${OPTARG}
+            if ! [[ "$LOG_PERIOD" =~ ^[0-9]+$ ]]; then
+                echo "Error: Log period must be a non-negative integer."
+                exit 1
+            fi
+            ;;
+        * )
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Check if dietpi-globals exists
+if [[ ! -f "$DIETPI_GLOBALS" ]]; then
+    echo -e "Error: dietpi-globals file not found at $DIETPI_GLOBALS"
+    exit 1
+fi
+
+# Hide the cursor
+tput civis
+
+# Ensure the cursor is shown again on script exit
+trap 'tput cnorm; echo ""; exit' SIGINT SIGTERM
+
+# Initialize time
+step_time=$(date +%s)      # Go down one line right at the start
+
+while true; do
+    # Get the current date and time in the format yyyy-MM-dd @ hh:mm:ss
+    CURRENT_DATETIME=$(date +"%Y-%m-%d @ %H:%M:%S")
+
+    # Source the dietpi-globals and run the functions
+    . "$DIETPI_GLOBALS"
+    CPU_TEMP=$(G_OBTAIN_CPU_TEMP)
+    CPU_LOAD=$(G_OBTAIN_CPU_USAGE)
+
+    # Get available RAM information
+    read RAM_USAGE_SIZE RAM_USAGE_TOTAL RAM_USAGE_PERCENT <<< $(free -b | mawk 'NR==2 {printf "%d %d %.1f", $3/1024^2, $2/1024^2, $3/$2*100}')
+
+    if $COLOR_GRADING; then
+        # Determine colors for color grading
+        COLOR_CPU_TEMP=$(get_color_cputemp $CPU_TEMP)
+        COLOR_CPU_LOAD=$(get_color_cpuload $CPU_LOAD)
+        COLOR_RAM_USAGE=$(get_color_ramusage $RAM_USAGE_PERCENT)
+    fi
+
+    # Format values
+    CPU_TEMP=$(printf "%3s" "${CPU_TEMP}")
+    CPU_LOAD=$(printf "%4.4s" "${CPU_LOAD}")
+    RAM_USAGE_PERCENT=$(printf "%4.4s" "${RAM_USAGE_PERCENT}")
+    RAM_USAGE_SIZE=$(printf "%4s" "${RAM_USAGE_SIZE}")
+    RAM_USAGE_TOTAL=$(printf "%4s" "${RAM_USAGE_TOTAL}")
+
+    # Print the current date, CPU temperature, CPU usage, and RAM information with color formatting
+    echo -e "${COLOR_DATETIME}$CURRENT_DATETIME${COLOR_RESET} ${COLOR_SEPARATOR}|${COLOR_RESET} ${COLOR_LABEL}CPU temp:${COLOR_RESET} ${COLOR_CPU_TEMP}${CPU_TEMP}°C${COLOR_RESET} ${COLOR_SEPARATOR}|${COLOR_RESET} ${COLOR_LABEL}CPU:${COLOR_RESET} ${COLOR_CPU_LOAD}${CPU_LOAD}%${COLOR_RESET} ${COLOR_SEPARATOR}|${COLOR_RESET} ${COLOR_LABEL}RAM:${COLOR_RESET} ${COLOR_RAM_USAGE}${RAM_USAGE_PERCENT}%${COLOR_RESET} ${COLOR_LABEL}(${RAM_USAGE_SIZE} / ${RAM_USAGE_TOTAL} MiB)${COLOR_RESET}"
+
+    # Move the cursor up one line unless the period is 0 or time is expired
+    current_time=$(date +%s)
+    if (( LOG_PERIOD == 0 || current_time < step_time )); then
+        tput cuu 1
+    else
+        step_time=$((step_time + LOG_PERIOD))
+    fi
+
+    # Wait for 1 second
+    sleep 1
+done
