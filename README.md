@@ -17,5 +17,5 @@ CPU data is taken from `G_OBTAIN_CPU_TEMP` and `G_OBTAIN_CPU_USAGE` from `DIETPI
 
 Some color grades use 256 color palette so not all terminals will display colors correctly.
 
-## Example output
+## Output example
 ![Preview](https://raw.githubusercontent.com/ataluts/cpu-mon/master/screenshot.png)
